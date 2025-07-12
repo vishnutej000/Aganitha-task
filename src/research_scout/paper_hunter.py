@@ -51,33 +51,86 @@ class PaperHunter:
             raise PubMedSearchError(f"Search failed: {str(e)}")
     
     def _search_papers(self, query: str, max_results: int, debug: bool) -> List[str]:
-        params = {
-            'db': 'pubmed',
-            'term': query,
-            'retmax': str(max_results),
-            'retmode': 'json',
-            'sort': 'relevance'
+        # Try multiple query variations for better results
+        queries_to_try = self._generate_query_variations(query)
+        all_paper_ids = set()
+        
+        for search_query in queries_to_try:
+            params = {
+                'db': 'pubmed',
+                'term': search_query,
+                'retmax': str(max_results),
+                'retmode': 'json',
+                'sort': 'relevance'
+            }
+            
+            if self.email:
+                params['email'] = self.email
+            if self.api_key:
+                params['api_key'] = self.api_key
+            
+            if debug:
+                print(f"[DEBUG] Searching for papers with query: {search_query}")
+                print(f"[DEBUG] Making request to {self.base_url}/esearch.fcgi with params: {params}")
+            
+            try:
+                response = requests.get(f"{self.base_url}/esearch.fcgi", params=params)
+                response.raise_for_status()
+                
+                data = response.json()
+                paper_ids = data.get('esearchresult', {}).get('idlist', [])
+                all_paper_ids.update(paper_ids)
+                
+                if debug:
+                    print(f"[DEBUG] Found {len(paper_ids)} papers for query: {search_query}")
+                
+                # If we get enough results, stop trying more variations
+                if len(all_paper_ids) >= max_results:
+                    break
+                    
+            except Exception as e:
+                if debug:
+                    print(f"[DEBUG] Query failed: {search_query} - {e}")
+                continue
+        
+        final_ids = list(all_paper_ids)[:max_results]
+        if debug:
+            print(f"[DEBUG] Total unique papers found: {len(final_ids)}")
+        
+        return final_ids
+    
+    def _generate_query_variations(self, query: str) -> List[str]:
+        """Generate multiple query variations to improve search results"""
+        variations = [query]  # Always start with original query
+        
+        # Common company name variations
+        company_variations = {
+            'johnson johnson': ['johnson & johnson', 'j&j', 'janssen'],
+            'johnson & johnson': ['johnson johnson', 'j&j', 'janssen'],
+            'j&j': ['johnson & johnson', 'johnson johnson', 'janssen'],
+            'glaxosmithkline': ['gsk'],
+            'gsk': ['glaxosmithkline'],
+            'bristol myers squibb': ['bms'],
+            'eli lilly': ['lilly'],
         }
         
-        if self.email:
-            params['email'] = self.email
-        if self.api_key:
-            params['api_key'] = self.api_key
+        query_lower = query.lower()
+        for original, alternates in company_variations.items():
+            if original in query_lower:
+                for alternate in alternates:
+                    new_query = query_lower.replace(original, alternate)
+                    if new_query != query_lower:
+                        variations.append(new_query)
         
-        if debug:
-            print(f"[DEBUG] Searching for papers with query: {query}")
-            print(f"[DEBUG] Making request to {self.base_url}/esearch.fcgi with params: {params}")
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_variations = []
+        for var in variations:
+            if var.lower() not in seen:
+                unique_variations.append(var)
+                seen.add(var.lower())
         
-        response = requests.get(f"{self.base_url}/esearch.fcgi", params=params)
-        response.raise_for_status()
-        
-        data = response.json()
-        paper_ids = data.get('esearchresult', {}).get('idlist', [])
-        
-        if debug:
-            print(f"[DEBUG] Found {len(paper_ids)} papers")
-        
-        return paper_ids
+        return unique_variations[:3]  # Limit to 3 variations to avoid too many API calls
     
     def _fetch_paper_details(self, paper_ids: List[str], debug: bool) -> List[ResearchPaper]:
         if not paper_ids:

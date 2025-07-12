@@ -13,11 +13,14 @@ class IndustryDetector:
     }
     
     MAJOR_COMPANIES = {
-        "pfizer", "novartis", "roche", "merck", "abbott", "bristol myers squibb",
-        "johnson & johnson", "johnson and johnson", "j&j", "janssen", "glaxosmithkline", "gsk", "sanofi", "astrazeneca",
-        "eli lilly", "amgen", "gilead", "biogen", "abbvie", "takeda", "bayer",
+        "pfizer", "novartis", "roche", "merck", "abbott", "bristol myers squibb", "bms",
+        "johnson & johnson", "johnson and johnson", "johnson johnson", "j&j", "janssen", 
+        "glaxosmithkline", "gsk", "sanofi", "astrazeneca", "astra zeneca",
+        "eli lilly", "lilly", "amgen", "gilead", "biogen", "abbvie", "takeda", "bayer",
         "boehringer ingelheim", "regeneron", "vertex", "moderna", "biontech",
-        "immunomedics", "celgene", "genentech", "allergan", "mylan"
+        "immunomedics", "celgene", "genentech", "allergan", "mylan", "teva",
+        "novo nordisk", "shire", "alexion", "incyte", "biomarin", "illumina",
+        "thermo fisher", "danaher", "medtronic", "edwards lifesciences", "intuitive surgical"
     }
     
     @classmethod
