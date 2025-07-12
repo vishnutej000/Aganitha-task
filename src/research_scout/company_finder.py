@@ -14,7 +14,7 @@ class IndustryDetector:
     
     MAJOR_COMPANIES = {
         "pfizer", "novartis", "roche", "merck", "abbott", "bristol myers squibb",
-        "johnson & johnson", "glaxosmithkline", "gsk", "sanofi", "astrazeneca",
+        "johnson & johnson", "johnson and johnson", "j&j", "janssen", "glaxosmithkline", "gsk", "sanofi", "astrazeneca",
         "eli lilly", "amgen", "gilead", "biogen", "abbvie", "takeda", "bayer",
         "boehringer ingelheim", "regeneron", "vertex", "moderna", "biontech",
         "immunomedics", "celgene", "genentech", "allergan", "mylan"
@@ -32,8 +32,8 @@ class IndustryDetector:
         if cls._has_known_company(text):
             return True
         
-        # Check for industry keywords
-        if cls._has_industry_keywords(text):
+        # Check for industry keywords BUT exclude academic contexts
+        if cls._has_industry_keywords(text) and not cls._is_academic_context(text):
             return True
         
         # Check corporate structure indicators (but exclude academia)
@@ -41,6 +41,17 @@ class IndustryDetector:
             return True
         
         return False
+    
+    @classmethod
+    def _is_academic_context(cls, text: str) -> bool:
+        # More comprehensive academic exclusions
+        academic_terms = [
+            "university", "college", "institute", "school", "department",
+            "faculty", "center", "centre", "laboratory", "lab", "hospital",
+            "medical center", "clinic", "foundation", "research center",
+            "dept", "division", "section", "program", "unit"
+        ]
+        return any(term in text for term in academic_terms)
     
     @classmethod
     def _has_known_company(cls, text: str) -> bool:
@@ -71,33 +82,83 @@ class IndustryDetector:
     
     @classmethod
     def extract_company_names(cls, affiliation: str) -> List[str]:
-        # Extracts potential company names from an affiliation string
         if not cls.is_industry_affiliated(affiliation):
             return []
         
         text = affiliation.lower()
         found_companies = []
         
-        # Look for known companies first
+        # Look for known companies first (this is most reliable)
         for company in cls.MAJOR_COMPANIES:
             if company in text:
-                # Get the proper case version
                 proper_name = cls._get_proper_company_name(company)
-                found_companies.append(proper_name)
+                if proper_name not in found_companies:
+                    found_companies.append(proper_name)
         
-        # If no known companies found, try to extract from structure
+        # If no known companies found, extract based on keywords and corporate structure
+        # This matches the original task requirements
         if not found_companies:
-            potential_name = cls._extract_potential_company_name(affiliation)
-            if potential_name:
-                found_companies.append(potential_name)
+            # Look for pharmaceutical/biotech keywords and extract nearby text
+            for keyword in cls.INDUSTRY_KEYWORDS:
+                if keyword in text:
+                    # Find the part of affiliation containing the keyword
+                    parts = re.split(r'[,;]', affiliation)
+                    for part in parts:
+                        if keyword in part.lower() and not cls._is_academic_context(part.lower()):
+                            clean_name = cls._clean_company_name(part.strip())
+                            if clean_name and clean_name not in found_companies:
+                                found_companies.append(clean_name)
+                            break
+                    break
+            
+            # Also check for corporate structure indicators
+            if not found_companies and cls._is_corporate_non_academic(text):
+                # Extract potential company name from corporate affiliation
+                potential_name = cls._extract_potential_company_name(affiliation)
+                if potential_name and not cls._is_academic_context(potential_name.lower()):
+                    found_companies.append(potential_name)
         
         return found_companies
+    
+    @classmethod
+    def _clean_company_name(cls, company_text: str) -> str:
+        # Clean up company name by removing locations and common suffixes
+        # Remove content in parentheses
+        clean = re.sub(r'\([^)]*\)', '', company_text)
+        # Remove common location patterns
+        clean = re.sub(r',\s*[A-Z]{2,}\s*\d*$', '', clean)  # Remove state/country codes
+        clean = re.sub(r',\s*[A-Za-z\s]+,\s*[A-Z]{2,}$', '', clean)  # Remove city, state
+        
+        # Take first meaningful part that contains the company info
+        parts = re.split(r'[,;-]', clean)
+        for part in parts:
+            part = part.strip()
+            # Skip parts that are clearly academic
+            if cls._is_academic_context(part.lower()):
+                continue
+            # If this part has industry keywords or corporate indicators, use it
+            if (any(keyword in part.lower() for keyword in cls.INDUSTRY_KEYWORDS) or 
+                any(re.search(pattern, part.lower()) for pattern in [r'\b(inc\.?|corp\.?|ltd\.?|llc|plc|company|co\.)\b'])):
+                # Remove common corporate suffixes for cleaner display
+                result = re.sub(r'\s+(Inc\.?|Corp\.?|Ltd\.?|LLC|Company|Co\.?)$', '', part, flags=re.IGNORECASE)
+                return result.strip()
+        
+        # If no good part found, return the first part cleaned up
+        if parts:
+            result = parts[0].strip()
+            result = re.sub(r'\s+(Inc\.?|Corp\.?|Ltd\.?|LLC|Company|Co\.?)$', '', result, flags=re.IGNORECASE)
+            return result.strip()
+        
+        return clean.strip()
     
     @classmethod
     def _get_proper_company_name(cls, company_key: str) -> str:
         # Converts company key to proper display name
         name_mapping = {
             "johnson & johnson": "Johnson & Johnson",
+            "johnson and johnson": "Johnson & Johnson", 
+            "j&j": "Johnson & Johnson",
+            "janssen": "Johnson & Johnson (Janssen)",
             "glaxosmithkline": "GlaxoSmithKline",
             "gsk": "GSK",
             "bristol myers squibb": "Bristol Myers Squibb",

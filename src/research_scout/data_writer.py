@@ -10,16 +10,34 @@ def save_research_results(results: SearchResults, filename: str) -> None:
         writer.writerow(['PubmedID', 'Title', 'Publication Date', 'Non-academic Author(s)', 'Company Affiliation(s)', 'Corresponding Author Email'])
         
         for paper in results.industry_papers:
-            industry_authors = ', '.join([author.display_name for author in paper.industry_authors])
-            companies = ', '.join([author.affiliation or '' for author in paper.industry_authors])
+            # Extract only non-academic author names
+            industry_authors = [author.display_name for author in paper.industry_authors]
+            industry_author_names = '; '.join(industry_authors)
+            
+            # Extract company names (not full affiliations)
+            from .company_finder import IndustryDetector
+            company_names = set()
+            for author in paper.industry_authors:
+                if author.affiliation:
+                    companies = IndustryDetector.extract_company_names(author.affiliation)
+                    company_names.update(companies)
+            
+            company_list = '; '.join(sorted(company_names)) if company_names else ''
+            
+            # Get corresponding author email
+            corresponding_email = ''
+            for author in paper.authors:
+                if author.is_corresponding and author.email:
+                    corresponding_email = author.email
+                    break
             
             writer.writerow([
                 paper.pubmed_id,
                 paper.title,
                 paper.publication_date.strftime('%Y-%m-%d') if paper.publication_date else '',
-                industry_authors,
-                companies,
-                paper.lead_contact_email or ''
+                industry_author_names,
+                company_list,
+                corresponding_email
             ])
 
 def generate_filename_from_query(query: str) -> str:
@@ -56,8 +74,26 @@ def export_detailed_results(results: SearchResults, filename: str) -> None:
         writer.writerow(['PubmedID', 'Title', 'Abstract', 'Publication Date', 'Journal', 'DOI', 'Non-academic Author(s)', 'Company Affiliation(s)', 'Corresponding Author Email'])
         
         for paper in results.industry_papers:
-            industry_authors = ', '.join([author.display_name for author in paper.industry_authors])
-            companies = ', '.join([author.affiliation or '' for author in paper.industry_authors])
+            # Extract only non-academic author names
+            industry_authors = [author.display_name for author in paper.industry_authors]
+            industry_author_names = '; '.join(industry_authors)
+            
+            # Extract company names (not full affiliations)
+            from .company_finder import IndustryDetector
+            company_names = set()
+            for author in paper.industry_authors:
+                if author.affiliation:
+                    companies = IndustryDetector.extract_company_names(author.affiliation)
+                    company_names.update(companies)
+            
+            company_list = '; '.join(sorted(company_names)) if company_names else ''
+            
+            # Get corresponding author email
+            corresponding_email = ''
+            for author in paper.authors:
+                if author.is_corresponding and author.email:
+                    corresponding_email = author.email
+                    break
             
             writer.writerow([
                 paper.pubmed_id,
@@ -66,7 +102,7 @@ def export_detailed_results(results: SearchResults, filename: str) -> None:
                 paper.publication_date.strftime('%Y-%m-%d') if paper.publication_date else '',
                 paper.journal or '',
                 paper.doi or '',
-                industry_authors,
-                companies,
-                paper.lead_contact_email or ''
+                industry_author_names,
+                company_list,
+                corresponding_email
             ])

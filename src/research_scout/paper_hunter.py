@@ -4,6 +4,7 @@ from typing import List, Optional
 from datetime import datetime
 from .research_types import SearchRequest, SearchResults, ResearchPaper, ResearchAuthor
 from .company_finder import IndustryDetector
+import re
 
 class PubMedConnectionError(Exception):
     pass
@@ -112,12 +113,39 @@ class PaperHunter:
             for article in root.findall('.//PubmedArticle'):
                 paper = self._parse_single_article(article)
                 if paper:
+                    # Additional email extraction from the full article
+                    self._enhance_corresponding_author_email(article, paper)
                     papers.append(paper)
         
         except ET.ParseError as e:
             print(f"Warning: Failed to parse XML: {e}")
         
         return papers
+    
+    def _enhance_corresponding_author_email(self, article, paper: ResearchPaper):
+        """Extract corresponding author email from various locations in the XML"""
+        # Check for email in abstract text
+        abstract_elem = article.find('.//Abstract')
+        if abstract_elem is not None:
+            abstract_text = ''.join(abstract_elem.itertext())
+            email = self._extract_email_from_text(abstract_text)
+            if email and not any(author.email for author in paper.authors):
+                # Find first author without email to assign it to
+                for author in paper.authors:
+                    if not author.email:
+                        author.email = email
+                        author.is_corresponding = True
+                        break
+        
+        # Check for email in any other text content
+        if not any(author.email for author in paper.authors):
+            article_text = ''.join(article.itertext())
+            email = self._extract_email_from_text(article_text)
+            if email:
+                # Assign to the last author (common convention for corresponding author)
+                if paper.authors:
+                    paper.authors[-1].email = email
+                    paper.authors[-1].is_corresponding = True
     
     def _parse_single_article(self, article) -> Optional[ResearchPaper]:
         try:
@@ -202,6 +230,20 @@ class PaperHunter:
             affiliation_elem = author_elem.find('.//Affiliation')
             affiliation = affiliation_elem.text if affiliation_elem is not None else None
             
+            # Extract email from affiliation text or author element
+            email = None
+            if affiliation:
+                email = self._extract_email_from_text(affiliation)
+            
+            # Also check for email in other parts of author element
+            if not email:
+                # Check for email in any text content of the author element
+                author_text = ''.join(author_elem.itertext())
+                email = self._extract_email_from_text(author_text)
+            
+            # Check if this is corresponding author
+            is_corresponding = self._is_corresponding_author(author_elem, affiliation)
+            
             if not last_name and not first_name:
                 return None
             
@@ -210,8 +252,8 @@ class PaperHunter:
                 last_name=last_name,
                 initials=initials,
                 affiliation=affiliation,
-                email=None,  # Email extraction would need more complex parsing
-                is_corresponding=False  # Would need to detect corresponding author marks
+                email=email,
+                is_corresponding=is_corresponding
             )
             
         except Exception:
@@ -220,3 +262,23 @@ class PaperHunter:
     def _extract_doi(self, article) -> Optional[str]:
         doi_elem = article.find('.//ArticleId[@IdType="doi"]')
         return doi_elem.text if doi_elem is not None else None
+    
+    def _extract_email_from_text(self, text: str) -> Optional[str]:
+        if not text:
+            return None
+        
+        # Email pattern
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(email_pattern, text)
+        return emails[0] if emails else None
+    
+    def _is_corresponding_author(self, author_elem, affiliation: str) -> bool:
+        # Check for corresponding author indicators
+        if affiliation:
+            corresponding_indicators = [
+                'corresponding author', 'correspondence', 'electronic address',
+                'email:', 'e-mail:', 'contact:', 'corresponding'
+            ]
+            affiliation_lower = affiliation.lower()
+            return any(indicator in affiliation_lower for indicator in corresponding_indicators)
+        return False
