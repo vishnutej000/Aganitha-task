@@ -39,6 +39,8 @@ flake8 = "^6.0.0"
 [tool.poetry.scripts]
 # CLI tool that uses the research_scout module
 research-scout-cli = "research_scout_cli.cli:main"
+# Task requirement: executable named get-papers-list
+get-papers-list = "research_scout_cli.cli:main"
 
 [build-system]
 requires = ["poetry-core"]
