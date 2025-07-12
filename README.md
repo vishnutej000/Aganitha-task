@@ -1,138 +1,131 @@
-# PubMed Paper Fetcher
+# Research Scout - Non-Academic Author Detection
 
-A Python program to fetch research papers from PubMed API that have at least one author affiliated with pharmaceutical or biotech companies. The program returns results as a CSV file with detailed information about papers and their non-academic authors.
+A Python library and CLI tool for identifying pharmaceutical and biotech industry authors in research papers. Uses advanced heuristics to distinguish academic from industry affiliations with high accuracy.
 
-## Features
+## 🏗️ Project Structure
 
-- **PubMed API Integration**: Fetches papers using PubMed's full query syntax
-- **Company Detection**: Identifies pharmaceutical and biotech company affiliations using heuristics and known company databases
-- **CSV Export**: Outputs results in structured CSV format with required columns
-- **Command-line Interface**: Easy-to-use CLI with various options
-- **Modular Design**: Separated into reusable module and CLI components
-- **Type Safety**: Fully typed Python code for better reliability
-- **Error Handling**: Robust error handling for API failures and invalid queries
+This project is split into two components:
 
-## Project Structure
+### 1. **research-scout** (Python Library/Module)
+- **Location**: `src/research_scout/`
+- **Purpose**: Core library for industry author detection
+- **Installation**: `pip install research-scout` (from Test PyPI)
+- **Usage**: Import and use programmatically in Python code
 
-```
-pubmed-paper-fetcher/
-├── src/
-│   └── pubmed_fetcher/
-│       ├── __init__.py          # Package initialization
-│       ├── models.py            # Data models (Paper, Author)
-│       ├── fetcher.py           # PubMed API interaction
-│       ├── utils.py             # Utility functions (CompanyDetector)
-│       ├── csv_export.py        # CSV export functionality
-│       └── cli.py               # Command-line interface
-├── tests/
-│   ├── __init__.py
-│   └── test_pubmed_fetcher.py   # Unit tests
-├── pyproject.toml               # Poetry configuration
-├── README.md                    # This file
-└── LICENSE                      # License file
-```
+### 2. **research-scout-cli** (Command Line Tool)
+- **Location**: `research_scout_cli/`
+- **Purpose**: CLI tool that uses the research-scout library
+- **Installation**: `pip install research-scout-cli` 
+- **Usage**: Command-line interface for end users
 
-## Installation
+## 📦 Installation
 
-### Prerequisites
-
-- Python 3.8 or higher
-- Poetry for dependency management
-
-### Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/vishnutej000/Cloudpac.git
-   cd Aganitha-task
-   ```
-
-2. **Install dependencies using Poetry:**
-   ```bash
-   poetry install
-   ```
-
-3. **Activate the virtual environment:**
-   ```bash
-   poetry shell
-   ```
-
-## Usage
-
-### Command Line Interface
-
-The program provides a command-line tool called `get-papers-list` that can be used after installation.
-
-#### Basic Usage
+### Option 1: Install from Test PyPI (Recommended)
 
 ```bash
-# Search for papers and print to console
-get-papers-list "cancer treatment"
+# Install the core library
+pip install --index-url https://test.pypi.org/simple/ research-scout
 
-# Save results to a CSV file
-get-papers-list "diabetes AND drug therapy" --file results.csv
-
-# Enable debug mode for detailed output
-get-papers-list "COVID-19 vaccine" --debug
-
-# Limit the number of results
-get-papers-list "alzheimer disease" --max-results 50 --file alzheimer_papers.csv
+# Install the CLI tool (includes the library as dependency)
+pip install --index-url https://test.pypi.org/simple/ research-scout-cli
 ```
 
-#### Command Line Options
+### Option 2: Install from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/vishnutej000/Aganitha-task.git
+cd Aganitha-task
+
+# Install the library
+pip install -e .
+
+# Or install with Poetry
+poetry install
+```
+## 🚀 Usage
+
+### Using the Python Library (Programmatic)
+
+```python
+import research_scout
+
+# Initialize the paper hunter
+hunter = research_scout.PaperHunter(debug=True)
+
+# Create search request
+request = research_scout.SearchRequest(
+    query="cancer treatment",
+    max_results=50,
+    email="your.email@example.com"
+)
+
+# Search for papers
+results = hunter.search_papers(request)
+
+# Filter for industry papers
+industry_papers = results.industry_papers
+
+# Analyze industry representation
+for paper in industry_papers:
+    print(f"Title: {paper.title}")
+    print(f"PubMed ID: {paper.pubmed_id}")
+    
+    # Get industry authors
+    industry_authors = paper.industry_authors
+    for author in industry_authors:
+        print(f"  Author: {author.display_name}")
+        print(f"  Affiliation: {author.affiliation}")
+        
+        # Extract company names
+        companies = research_scout.IndustryDetector.extract_company_names(
+            author.affiliation
+        )
+        print(f"  Companies: {companies}")
+
+# Generate statistics
+stats = research_scout.get_industry_statistics(
+    [author for paper in industry_papers for author in paper.authors]
+)
+print(f"Industry authors: {stats['industry_percentage']:.1f}%")
+print(f"Companies found: {stats['company_names']}")
+
+# Save results
+research_scout.save_research_results(industry_papers, "results.csv")
+```
+
+### Using the Command Line Interface
+
+```bash
+# Basic search
+research-scout-cli "cancer treatment"
+
+# Save to specific file
+research-scout-cli "diabetes AND drug therapy" --file results.csv
+
+# Enable debug mode with API key
+research-scout-cli "COVID-19 vaccine" --debug --email your@email.com --api-key YOUR_KEY
+
+# Display results in table format
+research-scout-cli "alzheimer disease" --table --max-results 25
+
+# Export detailed results with abstracts
+research-scout-cli "immunotherapy" --detailed --file detailed_results.csv
+```
+
+### CLI Options
 
 - `query`: PubMed search query (required, supports full PubMed syntax)
-- `-f, --file`: Specify filename to save results (optional, prints to console if not provided)
+- `-f, --file`: Specify filename to save results (optional)
 - `-d, --debug`: Enable debug information during execution
 - `--max-results`: Maximum number of papers to fetch (default: 100)
 - `--email`: Email address for NCBI API identification (recommended)
 - `--api-key`: NCBI API key for higher rate limits
+- `--table`: Display results in table format
+- `--detailed`: Export detailed results with abstracts
+- `--auto-save`: Automatically save results to file (default: True)
 - `-h, --help`: Display usage instructions
 - `--version`: Show version information
-
-#### Examples
-
-```bash
-# Search with complex PubMed query
-get-papers-list "breast cancer[Title] AND (2020:2023[PDAT])" --file recent_breast_cancer.csv
-
-# Search with author email for better API usage
-get-papers-list "immunotherapy" --email your.email@example.com --file immuno_papers.csv
-
-# Debug mode to see processing details
-get-papers-list "machine learning medicine" --debug --max-results 25
-```
-
-### Using as a Python Module
-
-The package can also be used programmatically:
-
-```python
-from pubmed_fetcher import PubMedFetcher
-from pubmed_fetcher.csv_export import save_papers_to_file
-
-# Initialize the fetcher
-fetcher = PubMedFetcher(email="your.email@example.com", debug=True)
-
-# Search and fetch papers
-papers = fetcher.search_and_fetch_papers("cancer treatment", max_results=50)
-
-# Save to CSV file
-save_papers_to_file(papers, "results.csv")
-
-# Process papers programmatically
-for paper in papers:
-    print(f"Title: {paper.title}")
-    print(f"PubMed ID: {paper.pubmed_id}")
-    
-    # Get non-academic authors
-    from pubmed_fetcher.utils import filter_authors_by_company_affiliation
-    company_authors = filter_authors_by_company_affiliation(paper.authors)
-    
-    for author in company_authors:
-        print(f"Author: {author.full_name}")
-        print(f"Affiliation: {author.affiliation}")
-```
 
 ## Output Format
 
@@ -235,46 +228,62 @@ The system provides detailed statistics:
 - Confidence scoring metrics
 - Pattern analysis for quality assessment
 
-## Development
+## 📦 Publishing to Test PyPI
 
-### Running Tests
+This project is set up for publishing to Test PyPI. Here's how to publish:
 
-```bash
-# Run all tests
-poetry run pytest
+### Prerequisites
 
-# Run with coverage
-poetry run pytest --cov=pubmed_fetcher
+1. **Install Poetry** (if not already installed):
+   ```bash
+   curl -sSL https://install.python-poetry.org | python3 -
+   ```
 
-# Run specific test file
-poetry run pytest tests/test_pubmed_fetcher.py
-```
+2. **Create Test PyPI Account**: 
+   - Go to https://test.pypi.org/account/register/
+   - Verify your email address
 
-### Code Quality
+3. **Generate API Token**:
+   - Go to https://test.pypi.org/manage/account/token/
+   - Create a new API token with "Entire account" scope
 
-The project uses several tools for code quality:
+### Publishing Steps
 
-```bash
-# Type checking with mypy
-poetry run mypy src/pubmed_fetcher
+1. **Run the setup script**:
+   ```bash
+   python setup_test_pypi.py
+   ```
 
-# Code formatting with black
-poetry run black src/pubmed_fetcher tests
+2. **Configure your API token**:
+   ```bash
+   poetry config pypi-token.test-pypi <your-token-here>
+   ```
 
-# Linting with flake8
-poetry run flake8 src/pubmed_fetcher tests
-```
+3. **Publish to Test PyPI**:
+   ```bash
+   poetry publish --repository test-pypi
+   ```
 
-### API Rate Limits
+4. **Install and test**:
+   ```bash
+   pip install --index-url https://test.pypi.org/simple/ research-scout
+   ```
 
-The PubMed API has rate limits:
-- **Without API key**: 3 requests per second
-- **With API key**: 10 requests per second
+### Automated Setup
 
-For better performance and reliability:
-1. Register for an NCBI account and get an API key
-2. Provide your email address when using the tool
-3. Use the `--api-key` option or set it programmatically
+The `setup_test_pypi.py` script automates most of the setup:
+- Checks Poetry installation
+- Updates version for test publishing
+- Configures Test PyPI repository
+- Builds the package
+- Provides step-by-step publishing instructions
+
+### Package Structure for Publishing
+
+- **research-scout**: Core library module
+- **research-scout-cli**: Command-line interface (depends on research-scout)
+
+Both packages can be published independently to Test PyPI.
 
 ## Dependencies
 
